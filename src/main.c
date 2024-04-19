@@ -121,18 +121,24 @@ char* get_ram(void) {
     return result;
 }
 
+char* ansi_color(int id) {
+    static char result[47];
+    sprintf(result, "\x1b[48;5;%dm  \x1b[48;5;%dm  \x1b[0m", id, id + 8);
+    return result;
+}
+
 int main(int argc, char** argv) {
     struct utsname name;
-	uname(&name);
-	
-	printf("\033[1m\033[36m%s@\033[1m\033[37m%s\n", getenv("USER"),name.nodename);
-    printf("\033[1m\033[36mos\t\033[0;37m%s\n", get_os());
-	printf("\033[1m\033[36mkernel\t\033[0;37m%s\n", name.release);
-    printf("\033[1m\033[36muptime\t\033[0;37m%"PRIu64"h %"PRIu64"m\n", get_uptime() / 60 / 60, get_uptime() / 60 % 60);
-	printf("\033[1m\033[36mshell\t\033[0;37m%s\n", getenv("SHELL"));
-    printf("\033[1m\033[36mhome\t\033[0;37m%s\n", getenv("HOME"));
-	printf("\033[1m\033[36mcpu\t\033[0;37m%s\033[0m\n", get_cpu());
-	printf("\033[1m\033[36mmemory\t\033[0;37m%s\033[0m\n", get_ram());
+    uname(&name);
+
+    printf("%s\t\x1b[1;34m%s@\x1b[1;37m%s\n", ansi_color(0), getenv("USER"),name.nodename);
+    printf("%s\t\x1b[1;34mos\t\x1b[0;37m%s\n", ansi_color(1), get_os());
+    printf("%s\t\x1b[1;34mkernel\t\x1b[0;37m%s\n", ansi_color(2), name.release);
+    printf("%s\t\x1b[1;34muptime\t\x1b[0;37m%"PRIu64"h %"PRIu64"m\n", ansi_color(3), get_uptime() / 60 / 60, get_uptime() / 60 % 60);
+    printf("%s\t\x1b[1;34mshell\t\x1b[0;37m%s\n", ansi_color(4), getenv("SHELL"));
+    printf("%s\t\x1b[1;34mhome\t\x1b[0;37m%s\n", ansi_color(5), getenv("HOME"));
+    printf("%s\t\x1b[1;34mcpu\t\x1b[0;37m%s\033[0m\n", ansi_color(6), get_cpu());
+    printf("%s\t\x1b[1;34mmemory\t\x1b[0;37m%s\033[0m\n", ansi_color(7), get_ram());
 
     return 0;
 }
