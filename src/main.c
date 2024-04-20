@@ -12,7 +12,37 @@
 #elif __FreeBSD__
     #include <time.h>
     #define FETCH_BSD
+#else
+    #error "Unsupported OS"
 #endif
+
+// Edit these if you dont like the default color scheme
+#define ANSI_COLOR      "\x1b[1;"
+#define ACCENT_COLOR    "\x1b[1;34m"
+#define BOLD_COLOR      "\x1b[1;37m"
+#define TEXT_COLOR      "\x1b[0;37m"
+#define ERROR_COLOR     "\x1b[0;91m"
+
+// Was getting some weird behaviour when using a function to create the palette
+const char* palette[] = {
+    "\x1b[48;5;0m  ",
+    "\x1b[48;5;1m  ",
+    "\x1b[48;5;2m  ",
+    "\x1b[48;5;3m  ",
+    "\x1b[48;5;4m  ",
+    "\x1b[48;5;5m  ",
+    "\x1b[48;5;6m  ",
+    "\x1b[48;5;7m  ",
+    "\x1b[48;5;8m  ",
+    "\x1b[48;5;9m  ",
+    "\x1b[48;5;10m  ",
+    "\x1b[48;5;11m  ",
+    "\x1b[48;5;12m  ",
+    "\x1b[48;5;13m  ",
+    "\x1b[48;5;14m  ",
+    "\x1b[48;5;15m  "
+};
+
 
 char* get_os(void) {
     FILE* os;
@@ -22,7 +52,10 @@ char* get_os(void) {
 
     static char result[255];
 
-    if(!(os = fopen("/etc/os-release", "r"))) { return (char*) "Unknown UNIX System"; }
+    if(!(os = fopen("/etc/os-release", "r"))) {
+        sprintf(result, ACCENT_COLOR "os\t" ERROR_COLOR "Unknown OS");
+        return result;
+    }
 
     while (fgets(buff, sizeof(buff), os)) {
         // Check if the line contains NAME or VERSION
@@ -46,9 +79,12 @@ char* get_os(void) {
     }
     fclose(os);
 
-    if (!name && !version) { return (char*) "Unknown UNIX System"; }
+    if (!name && !version) {
+        sprintf(result, ACCENT_COLOR "os\t" ERROR_COLOR "Unknown OS");
+        return result;
+    }
 
-    sprintf(result, "%s %s", name, version);
+    sprintf(result, ACCENT_COLOR "os\t" TEXT_COLOR "%s %s", name, version);
     free(name);
     free(version);
     return result;
@@ -56,13 +92,16 @@ char* get_os(void) {
 
 char* get_cpu(void) {
     FILE* cpu_info;
-    char buff[1024];
+    char buff[512];
     char* cpu_name = NULL;
     double cpu_speed = -1;
 
-    static char result[2048];
+    static char result[255];
 
-    if(!(cpu_info = fopen("/proc/cpuinfo", "r"))) { return (char*) "Unknown CPU"; };
+    if(!(cpu_info = fopen("/proc/cpuinfo", "r"))) {
+        sprintf(result, ACCENT_COLOR "cpu\t" ERROR_COLOR "Unknown CPU");
+        return result;
+    };
 
     while (fgets(buff, sizeof(buff), cpu_info)) {
         if (strncmp(buff, "model name", 10) == 0) {
@@ -72,39 +111,54 @@ char* get_cpu(void) {
         }
     }
     fclose(cpu_info);
-    if(!(cpu_info = fopen("/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq", "r"))) { return (char*) "Unknown CPU"; };
+
+    if(!(cpu_info = fopen("/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq", "r"))) {
+        sprintf(result, ACCENT_COLOR "cpu\t" ERROR_COLOR "Unknown CPU");
+        return result;
+    };
+
     fgets(buff, sizeof(buff), cpu_info);
     cpu_speed = atof(buff) / 1000000;
     fclose(cpu_info);
 
     int num_threads = get_nprocs();
-    sprintf(result, "%s (x%d) @ %.2fGHz", cpu_name, num_threads, cpu_speed);
+    sprintf(result, ACCENT_COLOR "cpu\t" TEXT_COLOR "%s (x%d) @ %.2fGHz", cpu_name, num_threads, cpu_speed);
     free(cpu_name);
+
     return result;
 }
 
-uint64_t get_uptime(void) {
+char* get_uptime(void) {
+    uint64_t uptime = 0;
+    static char result[255];
+
     #ifdef FETCH_LINUX
         struct sysinfo sys;
         sysinfo(&sys);
-        return sys.uptime;
+        uptime = sys.uptime;
     #elif FETCH_BSD
         struct timespec time_spec;
         if(clock_gettime(CLOCK_UPTIME_PRECISE, &time_spec) != 0) { return 0; }
-        return (uint64_t) time_spec.tv_sec;
+        uptime = (uint64_t) time_spec.tv_sec;
     #else
         #error "Unsupported OS"
     #endif
+    
+    sprintf(result, ACCENT_COLOR "uptime\t" TEXT_COLOR "%"PRIu64"h %"PRIu64"m", uptime / 60 / 60, uptime / 60 % 60);
+    return result;
 }
 
-char* get_ram(void) {
+char* get_mem(void) {
     FILE* mem_info;
     char buff_total[255];
     char buff_free[255];
 
-    static char result[30];
+    static char result[512];
 
-    if(!(mem_info = fopen("/proc/meminfo", "r"))) { return (char*)"ERROR"; }
+    if(!(mem_info = fopen("/proc/meminfo", "r"))) {
+        sprintf(result, ACCENT_COLOR "memory\t" ERROR_COLOR "ERROR");
+        return result;
+    }
 
     fgets(buff_total, 255, (FILE*)mem_info);
     fgets(buff_free, 255, (FILE*)mem_info);
@@ -116,14 +170,21 @@ char* get_ram(void) {
     strtok(buff_free, " ");
 	int free = atoi(strtok(NULL, " ")) / 1024;
 
-    sprintf(result, "%dM / %dM", total - free, total);
-
+    sprintf(result, ACCENT_COLOR "memory\t" TEXT_COLOR "%dM / %dM", total - free, total);
     return result;
 }
 
-char* ansi_color(int id) {
-    static char result[47];
-    sprintf(result, "\x1b[48;5;%dm  \x1b[48;5;%dm  \x1b[0m", id, id + 8);
+char* get_shell(void) {
+    static char result[255];
+
+    char* shell_path = getenv("SHELL");
+    char* shell = strrchr(shell_path, '/');
+    
+    if(shell != NULL) {
+        sprintf(result, ACCENT_COLOR "shell\t" TEXT_COLOR "%s", shell + 1);
+    } else {
+        sprintf(result, ACCENT_COLOR "shell\t" TEXT_COLOR "%s", shell_path);
+    }
     return result;
 }
 
@@ -131,14 +192,15 @@ int main(int argc, char** argv) {
     struct utsname name;
     uname(&name);
 
-    printf("%s\t\x1b[1;34m%s@\x1b[1;37m%s\n", ansi_color(0), getenv("USER"),name.nodename);
-    printf("%s\t\x1b[1;34mos\t\x1b[0;37m%s\n", ansi_color(1), get_os());
-    printf("%s\t\x1b[1;34mkernel\t\x1b[0;37m%s\n", ansi_color(2), name.release);
-    printf("%s\t\x1b[1;34muptime\t\x1b[0;37m%"PRIu64"h %"PRIu64"m\n", ansi_color(3), get_uptime() / 60 / 60, get_uptime() / 60 % 60);
-    printf("%s\t\x1b[1;34mshell\t\x1b[0;37m%s\n", ansi_color(4), getenv("SHELL"));
-    printf("%s\t\x1b[1;34mhome\t\x1b[0;37m%s\n", ansi_color(5), getenv("HOME"));
-    printf("%s\t\x1b[1;34mcpu\t\x1b[0;37m%s\033[0m\n", ansi_color(6), get_cpu());
-    printf("%s\t\x1b[1;34mmemory\t\x1b[0;37m%s\033[0m\n", ansi_color(7), get_ram());
+    // Stinkyyyyyy :((((((((((
+    printf("%s%s\x1b[0m\t" ACCENT_COLOR "%s@" BOLD_COLOR "%s\n", palette[0], palette[8], getenv("USER"), name.nodename);
+    printf("%s%s\x1b[0m\t%s\n", palette[1], palette[9], get_os());
+    printf("%s%s\x1b[0m\t" ACCENT_COLOR "kernel\t" TEXT_COLOR "%s\n", palette[2], palette[10] , name.release);
+    printf("%s%s\x1b[0m\t%s\n", palette[3], palette[11], get_uptime());
+    printf("%s%s\x1b[0m\t%s\n", palette[4], palette[12], get_shell());
+    printf("%s%s\x1b[0m\t" ACCENT_COLOR "home\t" TEXT_COLOR "%s\n", palette[5], palette[13], getenv("HOME"));
+    printf("%s%s\x1b[0m\t%s\n", palette[6], palette[14], get_cpu());
+    printf("%s%s\x1b[0m\t%s\n", palette[7], palette[15], get_mem());
 
     return 0;
 }
